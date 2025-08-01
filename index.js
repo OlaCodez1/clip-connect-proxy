@@ -28,10 +28,9 @@ function generateKey() {
 
 async function generateUniqueSessionCode() {
   let code = '';
-  let isUnique = false;
   let tries = 0;
 
-  while (!isUnique && tries < 10) {
+  while (tries < 10) {
     code = nanoid(6).toUpperCase();
 
     const { data, error } = await supabase
@@ -40,16 +39,24 @@ async function generateUniqueSessionCode() {
       .eq('code', code)
       .single();
 
-    if (!data && !error) {
-      isUnique = true;
+    // If no existing session with the code, we're good
+    if (error && error.code === 'PGRST116') {
+      return code;
     }
 
+    // If any other error, log and stop early
+    if (error && error.code !== 'PGRST116') {
+      console.error('Supabase error while checking code:', error);
+      throw new Error('Error checking session code');
+    }
+
+    // Otherwise, code exists — try again
     tries++;
   }
 
-  if (!isUnique) throw new Error('Failed to generate unique code');
-  return code;
+  throw new Error('Failed to generate unique code');
 }
+
 
 app.post('/create-session', async (req, res) => {
   try {
